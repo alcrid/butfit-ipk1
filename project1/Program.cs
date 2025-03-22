@@ -1,4 +1,6 @@
-﻿namespace project1;
+﻿using System.Net;
+
+namespace project1;
 
 class Program
 {
@@ -40,7 +42,8 @@ class Program
                     break;
 
                 default:
-                    target = args[i];
+                    if (string.IsNullOrEmpty(target))
+                        target = args[i];
                     break;
             }
         }
@@ -50,7 +53,25 @@ class Program
             Console.WriteLine("Error: No target specified.");
             return;
         }
-        Console.WriteLine($"Scanning {target} port {udpPorts[0]} with timeout {timeout}ms");
+
+        IPAddress[] resolvedAddresses = Dns.GetHostAddresses(target);
+        if (resolvedAddresses.Length == 0)
+        {
+            Console.WriteLine("Error: No IP addresses resolved.");
+            return;
+        }
+
+        IPAddress selectedIp = resolvedAddresses[0];
+        foreach (int port in udpPorts)
+        {
+            Console.WriteLine($"Pinging {selectedIp} port {port} (udp)");
+            UdpScanner.Scan(selectedIp.ToString(), port, timeout);
+        }
+        foreach (int port in tcpPorts)
+        {
+            Console.WriteLine($"Pinging {selectedIp} port {port} (tcp)");
+            TcpScanner.Scan(selectedIp.ToString(), port, timeout);
+        }
     }
 
     static List<int> ParsePorts(string input)
@@ -71,6 +92,7 @@ class Program
                 ports.Add(int.Parse(part));
             }
         }
+
         return ports;
     }
 }
