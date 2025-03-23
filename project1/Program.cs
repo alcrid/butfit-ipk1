@@ -1,4 +1,5 @@
 ﻿using System.Net;
+using System.Net.NetworkInformation;
 
 namespace project1;
 
@@ -18,14 +19,23 @@ class Program
             {
                 case "-h":
                 case "--help":
-                    Console.WriteLine("Usage: ./ipk-l4-scan [-i interface] [-t ports] [-u ports] [-w timeout] hostname/ip");
+                    Console.WriteLine(
+                        "Usage: ./ipk-l4-scan [-i interface] [-t ports] [-u ports] [-w timeout] hostname/ip");
                     return;
 
                 case "-i":
                 case "--interface":
-                    interfaceName = args[++i];
-                    break;
+                    if (i + 1 >= args.Length || args[i + 1].StartsWith("-"))
+                    {
+                        ListInterfaces();
+                        return;
+                    }
+                    else
+                    {
+                        interfaceName = args[++i];
+                    }
 
+                    break;
                 case "-t":
                 case "--pt":
                     tcpPorts.AddRange(ParsePorts(args[++i]));
@@ -67,6 +77,7 @@ class Program
             Console.WriteLine($"Pinging {selectedIp} port {port} (udp)");
             UdpScanner.Scan(selectedIp.ToString(), port, timeout);
         }
+
         foreach (int port in tcpPorts)
         {
             Console.WriteLine($"Pinging {selectedIp} port {port} (tcp)");
@@ -94,5 +105,37 @@ class Program
         }
 
         return ports;
+    }
+
+    static void ListInterfaces()
+    {
+        Console.WriteLine("************************INTERFACES************************");
+        Console.WriteLine("DEV    (SHORT)  IP/MASK                        TYPE     UP MTU   MAC");
+
+        var interfaces = NetworkInterface.GetAllNetworkInterfaces();
+
+        foreach (var iface in interfaces)
+        {
+            string devName = iface.Name;
+            string shortName = iface.Name;
+            string type = iface.NetworkInterfaceType.ToString().ToLower();
+            string status = iface.OperationalStatus == OperationalStatus.Up ? "up" : "down";
+            int mtu = iface.GetIPProperties().GetIPv4Properties()?.Mtu ?? 0;
+
+            byte[] macBytes = iface.GetPhysicalAddress().GetAddressBytes();
+            string mac = macBytes.Length > 0
+                ? string.Join(":", macBytes.Select(b => b.ToString("X2")))
+                : "";
+
+            foreach (var addrInfo in iface.GetIPProperties().UnicastAddresses)
+            {
+                string ip = addrInfo.Address.ToString();
+                int prefix = addrInfo.PrefixLength;
+                string ipMask = $"{ip}/{prefix}";
+                
+                Console.WriteLine(
+                    $"{devName,-7}({shortName,-7}) {ipMask,-29} {type,-8} {status,-2} {mtu,-5} {mac}");
+            }
+        }
     }
 }
