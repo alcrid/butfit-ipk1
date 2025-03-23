@@ -5,31 +5,35 @@ namespace project1;
 
 public static class UdpScanner
 {
-    public static void Scan(string ipAddress, int port, int timeout)
+    public static void Scan(string ipAddress, int port, int timeout, bool isIpv6)
     {
         IPAddress targetIp = IPAddress.Parse(ipAddress);
         IPEndPoint udpTarget = new IPEndPoint(targetIp, port);
+        AddressFamily addressFamily = isIpv6 ? AddressFamily.InterNetworkV6 : AddressFamily.InterNetwork;
 
-        using (Socket udpSocket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp))
+        using (Socket udpSocket = new Socket(addressFamily, SocketType.Dgram, ProtocolType.Udp))
         {
             byte[] payload = [];
             udpSocket.SendTo(payload, udpTarget);
         }
 
-        using (Socket icmpSocket = new Socket(AddressFamily.InterNetwork, SocketType.Raw, ProtocolType.Icmp))
+        ProtocolType icmpProtocol = isIpv6 ? ProtocolType.IcmpV6 : ProtocolType.Icmp;
+        using (Socket icmpSocket = new Socket(addressFamily, SocketType.Raw, icmpProtocol))
         {
-            icmpSocket.Bind(new IPEndPoint(IPAddress.Any, port));
+            IPAddress bindAddress = isIpv6 ? IPAddress.IPv6Any : IPAddress.Any;
+            icmpSocket.Bind(new IPEndPoint(bindAddress, port));
+
             icmpSocket.ReceiveTimeout = timeout;
 
             byte[] buffer = new byte[4096];
-            EndPoint remoteEp = new IPEndPoint(IPAddress.Any, 0); 
-            try {
-                icmpSocket.ReceiveFrom(buffer, ref remoteEp);
-                
-                int icmpType = buffer[20]; 
-                int icmpCode = buffer[21]; 
+            EndPoint remoteEp = new IPEndPoint(bindAddress, 0);
 
-                if (icmpType == 3 && icmpCode == 3)
+            try
+            {
+                icmpSocket.ReceiveFrom(buffer, ref remoteEp);
+
+                if ((isIpv6 && buffer.Length > 2 && buffer[0] == 1 && buffer[1] == 4) ||
+                    (!isIpv6 && buffer.Length > 21 && buffer[20] == 3 && buffer[21] == 3))
                 {
                     Console.WriteLine($"{ipAddress} {port} udp closed");
                 }

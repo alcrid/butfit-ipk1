@@ -30,10 +30,7 @@ class Program
                         ListInterfaces();
                         return;
                     }
-                    else
-                    {
-                        interfaceName = args[++i];
-                    }
+                    interfaceName = args[++i];
 
                     break;
                 case "-t":
@@ -70,19 +67,22 @@ class Program
             Console.WriteLine("Error: No IP addresses resolved.");
             return;
         }
-
+       
         IPAddress selectedIp = resolvedAddresses[0];
-        foreach (int port in udpPorts)
-        {
-            Console.WriteLine($"Pinging {selectedIp} port {port} (udp)");
-            UdpScanner.Scan(selectedIp.ToString(), port, timeout);
-        }
-
+        var isIpv6 = selectedIp.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6;
+        
         foreach (int port in tcpPorts)
         {
             Console.WriteLine($"Pinging {selectedIp} port {port} (tcp)");
-            TcpScanner.Scan(selectedIp.ToString(), port, timeout);
+            TcpScanner.Scan(selectedIp.ToString(), port, timeout, isIpv6);
         }
+
+        foreach (int port in udpPorts)
+        {
+            Console.WriteLine($"Pinging {selectedIp} port {port} (udp)");
+            UdpScanner.Scan(selectedIp.ToString(), port, timeout, isIpv6);
+        }
+
     }
 
     static List<int> ParsePorts(string input)
