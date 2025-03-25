@@ -73,14 +73,14 @@ class Program
         
         foreach (int port in tcpPorts)
         {
-            Console.WriteLine($"Pinging {selectedIp} port {port} (tcp)");
-            TcpScanner.Scan(selectedIp.ToString(), port, timeout, isIpv6);
+            Console.WriteLine($"Pinging {selectedIp} port {port} (tcp) Ipv6: {isIpv6}");
+            TcpScanner.Scan(selectedIp.ToString(), port, timeout, isIpv6, interfaceName);
         }
 
         foreach (int port in udpPorts)
         {
-            Console.WriteLine($"Pinging {selectedIp} port {port} (udp)");
-            UdpScanner.Scan(selectedIp.ToString(), port, timeout, isIpv6);
+            Console.WriteLine($"Pinging {selectedIp} port {port} (udp) Ipv6 : {isIpv6}");
+            UdpScanner.Scan(selectedIp.ToString(), port, timeout, isIpv6,interfaceName);
         }
 
     }
