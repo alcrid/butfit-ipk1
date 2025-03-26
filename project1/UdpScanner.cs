@@ -1,6 +1,5 @@
 using System.Net;
 using System.Net.Sockets;
-using System.Net.NetworkInformation;
 
 namespace project1;
 
@@ -8,14 +7,14 @@ public static class UdpScanner
 {
     public static void Scan(string ipAddress, int port, int timeout, bool isIpv6, string? interfaceName)
     {
-        IPAddress targetIp = IPAddress.Parse(ipAddress);
-        IPAddress sourceIp = GetInterfaceAddress(interfaceName, isIpv6);
-        IPEndPoint udpTarget = new IPEndPoint(targetIp, port);
+        var targetIp = IPAddress.Parse(ipAddress);
+        var sourceIp = Utils.GetInterfaceAddress(interfaceName, isIpv6);
+        var udpTarget = new IPEndPoint(targetIp, port);
 
         AddressFamily addressFamily = isIpv6 ? AddressFamily.InterNetworkV6 : AddressFamily.InterNetwork;
 
         // Send UDP packet from correct interface using UdpClient
-        using (UdpClient udpClient = new UdpClient(addressFamily))
+        using (var udpClient = new UdpClient(addressFamily))
         {
             udpClient.Client.Bind(new IPEndPoint(sourceIp, 0));
             byte[] payload = [];
@@ -23,8 +22,8 @@ public static class UdpScanner
         }
 
         // ICMP receive logic 
-        ProtocolType icmpProtocol = isIpv6 ? ProtocolType.IcmpV6 : ProtocolType.Icmp;
-        using (Socket icmpSocket = new Socket(addressFamily, SocketType.Raw, icmpProtocol))
+        var icmpProtocol = isIpv6 ? ProtocolType.IcmpV6 : ProtocolType.Icmp;
+        using (var icmpSocket = new Socket(addressFamily, SocketType.Raw, icmpProtocol))
         {
             IPAddress bindIp = isIpv6 ? IPAddress.IPv6Any : IPAddress.Any;
             icmpSocket.Bind(new IPEndPoint(bindIp, 0));
@@ -36,8 +35,7 @@ public static class UdpScanner
             try
             {
                 int received = icmpSocket.ReceiveFrom(buffer, ref remoteEp);
-                Console.WriteLine("Packet recieved");
-
+                
                 if (isIpv6)
                 {
                     // ICMPv6: Type 1 (Dest Unreachable), Code 4 (Port Unreachable)
@@ -62,43 +60,12 @@ public static class UdpScanner
             }
             catch (SocketException ex)
             {
-                if (ex.SocketErrorCode == SocketError.TimedOut)
-                    Console.WriteLine($"{ipAddress} {port} udp open t imed out");
-                else
-                    Console.WriteLine($"Socket error: {ex.Message}");
+                Console.WriteLine(ex.SocketErrorCode == SocketError.TimedOut
+                    ? $"{ipAddress} {port} udp open t imed out"
+                    : $"Socket error: {ex.Message}");
             }
         }
     }
 
-    private static IPAddress GetInterfaceAddress(string? interfaceName, bool isIpv6)
-    {
-        var interfaces = NetworkInterface.GetAllNetworkInterfaces();
-        
-        foreach (var ni in interfaces)
-        {
-            if (!string.IsNullOrEmpty(interfaceName) && ni.Name != interfaceName)
-                continue;
-
-            if (ni.OperationalStatus != OperationalStatus.Up ||
-                ni.NetworkInterfaceType == NetworkInterfaceType.Loopback)
-                continue;
-
-            var ipProps = ni.GetIPProperties();
-
-            foreach (var addr in ipProps.UnicastAddresses)
-            {
-                if (isIpv6 &&
-                    addr.Address.AddressFamily == AddressFamily.InterNetworkV6)
-                    return addr.Address;
-
-                if (!isIpv6 &&
-                    addr.Address.AddressFamily == AddressFamily.InterNetwork)
-                    return addr.Address;
-            }
-        }
-
-        throw new Exception(!string.IsNullOrEmpty(interfaceName)
-            ? $"Interface '{interfaceName}' with {(isIpv6 ? "IPv6" : "IPv4")} address not found or inactive."
-            : $"No active {(isIpv6 ? "IPv6" : "IPv4")} address found on any interface.");
-    }
+   
 }

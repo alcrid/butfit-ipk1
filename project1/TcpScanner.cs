@@ -10,43 +10,44 @@ public static class TcpScanner
     public static void Scan(string ipAddress, int port, int timeout, bool isIpv6, string? interfaceName)
     {
         var destinationIp = IPAddress.Parse(ipAddress);
-        var sourceIp = GetInterfaceAddress(interfaceName, isIpv6);
+        var sourceIp = Utils.GetInterfaceAddress(interfaceName, isIpv6);
         var sourcePort = (ushort)new Random().Next(1024, 65535);
 
         // Create TCP header (SYN packet) with pseudo-header-based checksum
-        byte[] tcpHeader = new TcpHeader(sourcePort, (ushort)port, sourceIp, destinationIp).GetBytes();
+        var tcpHeader = new TcpHeader(sourcePort, (ushort)port, sourceIp, destinationIp).GetBytes();
 
         // Build IP header (IPv4 or IPv6), total length includes both IP + TCP header
-        byte[] ipHeader = isIpv6
+        var ipHeader = isIpv6
             ? Ipv6Header.Build(sourceIp, destinationIp, tcpHeader.Length, 6) // TCP = protocol 6
             : Ipv4Header.Build(sourceIp, destinationIp, tcpHeader.Length + 20, 6); // +20 for IPv4 header length
 
-        // Combine headers into a full raw packet
-        byte[] packet = new byte[ipHeader.Length + tcpHeader.Length];
+        // Combine headers into packet
+        var packet = new byte[ipHeader.Length + tcpHeader.Length];
         Buffer.BlockCopy(ipHeader, 0, packet, 0, ipHeader.Length);
         Buffer.BlockCopy(tcpHeader, 0, packet, ipHeader.Length, tcpHeader.Length);
 
-        bool gotResponse = false;
+        var gotResponse = false;
 
-        for (int attempt = 0; attempt < 2; attempt++)
+        for (var attempt = 0; attempt < 2; attempt++)
         {
-            AddressFamily family = isIpv6 ? AddressFamily.InterNetworkV6 : AddressFamily.InterNetwork;
+            var family = isIpv6 ? AddressFamily.InterNetworkV6 : AddressFamily.InterNetwork;
 
             // Sending crafted SYN packet
-            using (Socket sendSocket = new Socket(family, SocketType.Raw, ProtocolType.Tcp))
+            using (var sendSocket = new Socket(family, SocketType.Raw, ProtocolType.Tcp))
             {
                 if (!isIpv6)
                 {
                     sendSocket.SetSocketOption(SocketOptionLevel.IP, SocketOptionName.HeaderIncluded, true);
                 }
-                sendSocket.SendTo(packet, new IPEndPoint(destinationIp, port));
+
+                sendSocket.SendTo(packet, new IPEndPoint(destinationIp, 0));
             }
 
             // Receiving TCP response from target
-            using (Socket recvSocket = new Socket(family, SocketType.Raw, ProtocolType.Tcp))
+            using (var recieveSocket = new Socket(family, SocketType.Raw, ProtocolType.Tcp))
             {
-                recvSocket.Bind(new IPEndPoint(sourceIp, 0));
-                recvSocket.ReceiveTimeout = timeout;
+                recieveSocket.Bind(new IPEndPoint(sourceIp, 0));
+                recieveSocket.ReceiveTimeout = timeout;
 
                 byte[] buffer = new byte[4096];
                 EndPoint remoteEp = family == AddressFamily.InterNetwork
@@ -57,7 +58,7 @@ public static class TcpScanner
                 {
                     while (true)
                     {
-                        int received = recvSocket.ReceiveFrom(buffer, ref remoteEp);
+                        var received = recieveSocket.ReceiveFrom(buffer, ref remoteEp);
                         if (received <= 0) continue;
 
                         if (family == AddressFamily.InterNetwork)
@@ -102,7 +103,7 @@ public static class TcpScanner
 
                             if (!srcIp.Equals(destinationIp) || !dstIp.Equals(sourceIp)) continue;
 
-                            int ipHeaderLen = 40; // IPv6 header is always 40 bytes
+                            var ipHeaderLen = 40; // IPv6 header is always 40 bytes
                             if (ipHeaderLen + 20 > received) continue;
 
                             var srcPort = (ushort)((buffer[ipHeaderLen] << 8) + buffer[ipHeaderLen + 1]);
@@ -125,11 +126,9 @@ public static class TcpScanner
                 }
                 catch (SocketException ex)
                 {
-                    if (ex.SocketErrorCode != SocketError.TimedOut)
-                    {
-                        Console.WriteLine($"Socket error: {ex.Message}");
-                        return;
-                    }
+                    if (ex.SocketErrorCode == SocketError.TimedOut) continue;
+                    Console.WriteLine($"Socket error: {ex.Message}");
+                    return;
                 }
             }
         }
@@ -139,42 +138,5 @@ public static class TcpScanner
         {
             Console.WriteLine($"{ipAddress} {port} tcp filtered");
         }
-    }
-
-    // 🔧 Gets the IP bound to the specified interface (or first usable one if not specified)
-    public static IPAddress GetInterfaceAddress(string? interfaceName, bool isIpv6)
-    {
-        var interfaces = NetworkInterface.GetAllNetworkInterfaces();
-
-        foreach (var ni in interfaces)
-        {
-            if (!string.IsNullOrEmpty(interfaceName) && ni.Name != interfaceName)
-                continue;
-
-            if (ni.OperationalStatus != OperationalStatus.Up ||
-                ni.NetworkInterfaceType == NetworkInterfaceType.Loopback)
-                continue;
-
-            var ipProps = ni.GetIPProperties();
-
-            foreach (var addr in ipProps.UnicastAddresses)
-            {
-                if (isIpv6 &&
-                    addr.Address.AddressFamily == AddressFamily.InterNetworkV6)
-                {
-                    return addr.Address;
-                }
-
-                if (!isIpv6 &&
-                    addr.Address.AddressFamily == AddressFamily.InterNetwork)
-                {
-                    return addr.Address;
-                }
-            }
-        }
-
-        throw new Exception(!string.IsNullOrEmpty(interfaceName)
-            ? $"Interface '{interfaceName}' with {(isIpv6 ? "IPv6" : "IPv4")} address not found or inactive."
-            : $"No active {(isIpv6 ? "IPv6" : "IPv4")} address found on any interface.");
     }
 }

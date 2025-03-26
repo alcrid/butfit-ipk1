@@ -1,9 +1,10 @@
 ﻿using System.Net;
 using System.Net.NetworkInformation;
+using System.Net.Sockets;
 
 namespace project1;
 
-class Program
+internal static class Program
 {
     static void Main(string[] args)
     {
@@ -12,6 +13,13 @@ class Program
         string? interfaceName = null;
         List<int> tcpPorts = new List<int>();
         List<int> udpPorts = new List<int>();
+
+        // Handle no args or --interface without value
+        if (args.Length == 0 || (args.Length == 1 && (args[0] == "-i" || args[0] == "--interface")))
+        {
+            ListInterfaces();
+            return;
+        }
 
         for (int i = 0; i < args.Length; i++)
         {
@@ -30,9 +38,10 @@ class Program
                         ListInterfaces();
                         return;
                     }
-                    interfaceName = args[++i];
 
+                    interfaceName = args[++i];
                     break;
+
                 case "-t":
                 case "--pt":
                     tcpPorts.AddRange(ParsePorts(args[++i]));
@@ -45,7 +54,12 @@ class Program
 
                 case "-w":
                 case "--wait":
-                    timeout = int.Parse(args[++i]);
+                    if (!int.TryParse(args[++i], out timeout))
+                    {
+                        Console.Error.WriteLine("Invalid timeout value.");
+                        Environment.Exit(1);
+                    }
+
                     break;
 
                 default:
@@ -57,34 +71,50 @@ class Program
 
         if (string.IsNullOrEmpty(target))
         {
-            Console.WriteLine("Error: No target specified.");
-            return;
+            Console.Error.WriteLine("Error: No target specified.");
+            Environment.Exit(1);
         }
 
-        IPAddress[] resolvedAddresses = Dns.GetHostAddresses(target);
-        if (resolvedAddresses.Length == 0)
+        try
         {
-            Console.WriteLine("Error: No IP addresses resolved.");
-            return;
-        }
-       
-        IPAddress selectedIp = resolvedAddresses[0];
-        var isIpv6 = selectedIp.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6;
-        
-        foreach (int port in tcpPorts)
-        {
-            Console.WriteLine($"Pinging {selectedIp} port {port} (tcp) Ipv6: {isIpv6}");
-            TcpScanner.Scan(selectedIp.ToString(), port, timeout, isIpv6, interfaceName);
-        }
+            IPAddress[] resolvedAddresses = Dns.GetHostAddresses(target);
+            if (resolvedAddresses.Length == 0)
+            {
+                Console.Error.WriteLine("Error: No IP addresses resolved.");
+                Environment.Exit(1);
+            }
 
-        foreach (int port in udpPorts)
-        {
-            Console.WriteLine($"Pinging {selectedIp} port {port} (udp) Ipv6 : {isIpv6}");
-            UdpScanner.Scan(selectedIp.ToString(), port, timeout, isIpv6,interfaceName);
-        }
+            IPAddress selectedIp = resolvedAddresses[0];
 
+            var isIpv6 = selectedIp.AddressFamily == AddressFamily.InterNetworkV6;
+
+            // Scan Tcp ports
+            foreach (var port in tcpPorts)
+            {
+                Console.Error.WriteLine($"Pinging {selectedIp} port {port} (tcp) Ipv6: {isIpv6}");
+                TcpScanner.Scan(selectedIp.ToString(), port, timeout, isIpv6, interfaceName);
+            }
+            
+            // Scan Udp ports
+            foreach (var port in udpPorts)
+            {
+                Console.Error.WriteLine($"Pinging {selectedIp} port {port} (udp) Ipv6 : {isIpv6}");
+                UdpScanner.Scan(selectedIp.ToString(), port, timeout, isIpv6, interfaceName);
+            }
+        }
+        catch (SocketException ex)
+        {
+            Console.Error.WriteLine($"Error: Failed to resolve target '{target}': {ex.Message}");
+            Environment.Exit(1);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Unexpected error: {ex.Message}");
+            Environment.Exit(1);
+        }
     }
 
+    // Given the port range returns a list of ports 
     static List<int> ParsePorts(string input)
     {
         List<int> ports = new List<int>();
@@ -93,9 +123,9 @@ class Program
             if (part.Contains('-'))
             {
                 var range = part.Split('-');
-                int start = int.Parse(range[0]);
-                int end = int.Parse(range[1]);
-                for (int i = start; i <= end; i++)
+                var start = int.Parse(range[0]);
+                var end = int.Parse(range[1]);
+                for (var i = start; i <= end; i++)
                     ports.Add(i);
             }
             else
@@ -107,6 +137,7 @@ class Program
         return ports;
     }
 
+    // Lists out the interfaces like nmap
     static void ListInterfaces()
     {
         Console.WriteLine("************************INTERFACES************************");
@@ -116,23 +147,23 @@ class Program
 
         foreach (var iface in interfaces)
         {
-            string devName = iface.Name;
-            string shortName = iface.Name;
-            string type = iface.NetworkInterfaceType.ToString().ToLower();
-            string status = iface.OperationalStatus == OperationalStatus.Up ? "up" : "down";
-            int mtu = iface.GetIPProperties().GetIPv4Properties()?.Mtu ?? 0;
+            var devName = iface.Name;
+            var shortName = iface.Name;
+            var type = iface.NetworkInterfaceType.ToString().ToLower();
+            var status = iface.OperationalStatus == OperationalStatus.Up ? "up" : "down";
+            var mtu = iface.GetIPProperties().GetIPv4Properties()?.Mtu ?? 0;
 
-            byte[] macBytes = iface.GetPhysicalAddress().GetAddressBytes();
-            string mac = macBytes.Length > 0
+            var macBytes = iface.GetPhysicalAddress().GetAddressBytes();
+            var mac = macBytes.Length > 0
                 ? string.Join(":", macBytes.Select(b => b.ToString("X2")))
                 : "";
 
             foreach (var addrInfo in iface.GetIPProperties().UnicastAddresses)
             {
-                string ip = addrInfo.Address.ToString();
-                int prefix = addrInfo.PrefixLength;
-                string ipMask = $"{ip}/{prefix}";
-                
+                var ip = addrInfo.Address.ToString();
+                var prefix = addrInfo.PrefixLength;
+                var ipMask = $"{ip}/{prefix}";
+
                 Console.WriteLine(
                     $"{devName,-7}({shortName,-7}) {ipMask,-29} {type,-8} {status,-2} {mtu,-5} {mac}");
             }
