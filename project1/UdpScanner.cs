@@ -61,7 +61,7 @@ public static class UdpScanner
             catch (SocketException ex)
             {
                 Console.WriteLine(ex.SocketErrorCode == SocketError.TimedOut
-                    ? $"{ipAddress} {port} udp open t imed out"
+                    ? $"{ipAddress} {port} udp open"
                     : $"Socket error: {ex.Message}");
             }
         }

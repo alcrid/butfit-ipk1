@@ -91,14 +91,14 @@ internal static class Program
             // Scan Tcp ports
             foreach (var port in tcpPorts)
             {
-                Console.Error.WriteLine($"Pinging {selectedIp} port {port} (tcp) Ipv6: {isIpv6}");
+                // Console.Error.WriteLine($"Pinging {selectedIp} port {port} (tcp) Ipv6: {isIpv6}");
                 TcpScanner.Scan(selectedIp.ToString(), port, timeout, isIpv6, interfaceName);
             }
             
             // Scan Udp ports
             foreach (var port in udpPorts)
             {
-                Console.Error.WriteLine($"Pinging {selectedIp} port {port} (udp) Ipv6 : {isIpv6}");
+                // Console.Error.WriteLine($"Pinging {selectedIp} port {port} (udp) Ipv6 : {isIpv6}");
                 UdpScanner.Scan(selectedIp.ToString(), port, timeout, isIpv6, interfaceName);
             }
         }
@@ -138,7 +138,7 @@ internal static class Program
     }
 
     // Lists out the interfaces like nmap
-    static void ListInterfaces()
+    private static void ListInterfaces()
     {
         Console.WriteLine("************************INTERFACES************************");
         Console.WriteLine("DEV    (SHORT)  IP/MASK                        TYPE     UP MTU   MAC");

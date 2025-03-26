@@ -64,8 +64,8 @@ public static class TcpScanner
                         if (family == AddressFamily.InterNetwork)
                         {
                             // Parse IPv4 header fields
-                            var srcIp = new IPAddress(new byte[] { buffer[12], buffer[13], buffer[14], buffer[15] });
-                            var dstIp = new IPAddress(new byte[] { buffer[16], buffer[17], buffer[18], buffer[19] });
+                            var srcIp = new IPAddress(new[] { buffer[12], buffer[13], buffer[14], buffer[15] });
+                            var dstIp = new IPAddress(new[] { buffer[16], buffer[17], buffer[18], buffer[19] });
 
                             // Make sure packet is from the correct target
                             if (!srcIp.Equals(destinationIp) || !dstIp.Equals(sourceIp)) continue;
@@ -86,9 +86,6 @@ public static class TcpScanner
                                 Console.WriteLine($"{ipAddress} {port} tcp closed");
                             else
                                 Console.WriteLine($"{ipAddress} {port} tcp filtered");
-
-                            gotResponse = true;
-                            return;
                         }
                         else
                         {
@@ -118,10 +115,10 @@ public static class TcpScanner
                                 Console.WriteLine($"{ipAddress} {port} tcp closed");
                             else
                                 Console.WriteLine($"{ipAddress} {port} tcp filtered");
-
-                            gotResponse = true;
-                            return;
                         }
+
+                        gotResponse = true;
+                        return;
                     }
                 }
                 catch (SocketException ex)
