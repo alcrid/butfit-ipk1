@@ -9,6 +9,10 @@ This project implements a TCP and UDP port scanner in C#, compliant with the ass
 
 ---
 
+## UML diagram of project
+
+![img.png](images/uml.png)
+
 ## Theory and Technical Background
 
 ### TCP SYN Scan
@@ -21,13 +25,13 @@ A SYN scan is a type of half-open scanning that sends a SYN packet to the target
 | No response (even after retransmissions) | filtered |
 
 **Scan of open port**  
-![Open Port](img.png)
+![Open Port](images/syn_scan1.png)
 
 **Scan of closed port**  
-![Closed Port](img_1.png)
+![Closed Port](images/syn_scan3.png)
 
 **Scan of filtered port**  
-![Filtered Port](img_2.png)
+![Filtered Port](images/syn_scan2.png)
 
 Reference: [Nmap SYN Scan](https://nmap.org/book/synscan.html)
 
@@ -51,7 +55,7 @@ If you are scanning port `53` (commonly used for DNS):
 - If the port is **closed**, the scanner will receive an ICMP "Port Unreachable" message (ICMP type 3, code 3 for IPv4 or type 1, code 4 for IPv6).
 
 **UDP Scan Example:**
-![UDP Scan](img_3.png)
+![UDP Scan](images/udp_scan.png)
 
 Reference: [Nmap UDP Scan](https://nmap.org/book/scan-methods-udp-scan.html)
 

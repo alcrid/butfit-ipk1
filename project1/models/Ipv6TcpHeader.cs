@@ -1,6 +1,8 @@
 using System.Net;
 
-public class TcpHeader
+namespace project1.models;
+
+public class Ipv6TcpHeader
 {
     public ushort SourcePort;
     public ushort DestinationPort;
@@ -12,20 +14,20 @@ public class TcpHeader
     public ushort Checksum = 0;
     public ushort UrgentPointer = 0;
 
-    public IPAddress SourceIP;
-    public IPAddress DestinationIP;
+    public readonly IPAddress SourceIp;
+    public readonly IPAddress DestinationIp;
 
-    public TcpHeader(ushort sourcePort, ushort destinationPort, IPAddress sourceIP, IPAddress destinationIP)
+    public Ipv6TcpHeader(ushort sourcePort, ushort destinationPort, IPAddress sourceIp, IPAddress destinationIp)
     {
         SourcePort = sourcePort;
         DestinationPort = destinationPort;
-        SourceIP = sourceIP;
-        DestinationIP = destinationIP;
+        SourceIp = sourceIp;
+        DestinationIp = destinationIp;
     }
 
     public byte[] GetBytes()
     {
-        byte[] buffer = new byte[20];
+        byte[] buffer = new byte[40]; // Standard size of IPv6 header is 40 bytes
 
         buffer[0] = (byte)(SourcePort >> 8);
         buffer[1] = (byte)(SourcePort & 0xFF);
@@ -50,14 +52,14 @@ public class TcpHeader
 
     private ushort ComputeChecksum(byte[] tcpSegment)
     {
-        byte[] pseudoHeader = new byte[12 + tcpSegment.Length];
-        Array.Copy(SourceIP.GetAddressBytes(), 0, pseudoHeader, 0, 4);
-        Array.Copy(DestinationIP.GetAddressBytes(), 0, pseudoHeader, 4, 4);
-        pseudoHeader[8] = 0;
-        pseudoHeader[9] = 6; // TCP protocol
-        pseudoHeader[10] = (byte)(tcpSegment.Length >> 8);
-        pseudoHeader[11] = (byte)(tcpSegment.Length & 0xFF);
-        Array.Copy(tcpSegment, 0, pseudoHeader, 12, tcpSegment.Length);
+        byte[] pseudoHeader = new byte[40 + tcpSegment.Length]; // Adjusted for IPv6 (40-byte header)
+        Array.Copy(SourceIp.GetAddressBytes(), 0, pseudoHeader, 0, 16); // 16-byte IPv6 address
+        Array.Copy(DestinationIp.GetAddressBytes(), 0, pseudoHeader, 16, 16); // 16-byte IPv6 address
+        pseudoHeader[32] = 0;
+        pseudoHeader[33] = 6; // TCP protocol
+        pseudoHeader[34] = (byte)(tcpSegment.Length >> 8);
+        pseudoHeader[35] = (byte)(tcpSegment.Length & 0xFF);
+        Array.Copy(tcpSegment, 0, pseudoHeader, 40, tcpSegment.Length);
 
         uint sum = 0;
         for (int i = 0; i < pseudoHeader.Length - 1; i += 2)
