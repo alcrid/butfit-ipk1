@@ -9,7 +9,7 @@ internal static class Program
     static void Main(string[] args)
     {
         string target = "";
-        int timeout = 5000;
+        int timeout = 5000; // Default timeout is 5000ms
         string? interfaceName = null;
         List<int> tcpPorts = new List<int>();
         List<int> udpPorts = new List<int>();
@@ -54,12 +54,11 @@ internal static class Program
 
                 case "-w":
                 case "--wait":
-                    if (!int.TryParse(args[++i], out timeout))
+                    if (!int.TryParse(args[++i], out timeout) || timeout <= 0)
                     {
                         Console.Error.WriteLine("Invalid timeout value.");
                         Environment.Exit(1);
                     }
-
                     break;
 
                 default:
@@ -85,20 +84,17 @@ internal static class Program
             }
 
             IPAddress selectedIp = resolvedAddresses[0];
-
             var isIpv6 = selectedIp.AddressFamily == AddressFamily.InterNetworkV6;
 
-            // Scan Tcp ports
+            // Scan TCP ports
             foreach (var port in tcpPorts)
             {
-                // Console.Error.WriteLine($"Pinging {selectedIp} port {port} (tcp) Ipv6: {isIpv6}");
                 TcpScanner.Scan(selectedIp.ToString(), port, timeout, isIpv6, interfaceName);
             }
-            
-            // Scan Udp ports
+
+            // Scan UDP ports
             foreach (var port in udpPorts)
             {
-                // Console.Error.WriteLine($"Pinging {selectedIp} port {port} (udp) Ipv6 : {isIpv6}");
                 UdpScanner.Scan(selectedIp.ToString(), port, timeout, isIpv6, interfaceName);
             }
         }
@@ -114,7 +110,7 @@ internal static class Program
         }
     }
 
-    // Given the port range returns a list of ports 
+    // Parse the port ranges, e.g., "22-80" or "22,80,443"
     static List<int> ParsePorts(string input)
     {
         List<int> ports = new List<int>();
@@ -123,17 +119,41 @@ internal static class Program
             if (part.Contains('-'))
             {
                 var range = part.Split('-');
-                var start = int.Parse(range[0]);
-                var end = int.Parse(range[1]);
-                for (var i = start; i <= end; i++)
-                    ports.Add(i);
+                if (range.Length == 2 && int.TryParse(range[0], out int start) && int.TryParse(range[1], out int end))
+                {
+                    if (start > end || start < 1 || end > 65535)
+                    {
+                        Console.Error.WriteLine($"Invalid port range: {start}-{end} (must be between 1-65535)");
+                        Environment.Exit(1);
+                    }
+
+                    for (var i = start; i <= end; i++)
+                        ports.Add(i);
+                }
+                else
+                {
+                    Console.Error.WriteLine($"Invalid port range format: {part}");
+                    Environment.Exit(1);
+                }
             }
             else
             {
-                ports.Add(int.Parse(part));
+                if (int.TryParse(part, out int port))
+                {
+                    if (port < 1 || port > 65535)
+                    {
+                        Console.Error.WriteLine($"Invalid port value: {port} (must be between 1-65535)");
+                        Environment.Exit(1);
+                    }
+                    ports.Add(port);
+                }
+                else
+                {
+                    Console.Error.WriteLine($"Invalid port value: {part}");
+                    Environment.Exit(1);
+                }
             }
         }
-
         return ports;
     }
 

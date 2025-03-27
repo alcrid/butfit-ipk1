@@ -32,101 +32,103 @@ public static class TcpScanner
         {
             var family = isIpv6 ? AddressFamily.InterNetworkV6 : AddressFamily.InterNetwork;
 
-            // Sending crafted SYN packet
-            using (var sendSocket = new Socket(family, SocketType.Raw, ProtocolType.Tcp))
-            {
-                if (!isIpv6)
-                {
-                    sendSocket.SetSocketOption(SocketOptionLevel.IP, SocketOptionName.HeaderIncluded, true);
-                }
+            using var socket = new Socket(family, SocketType.Raw, ProtocolType.Tcp);
 
-                sendSocket.SendTo(packet, new IPEndPoint(destinationIp, 0));
+            socket.ReceiveTimeout = timeout;
+
+            if (!isIpv6)
+            {
+                socket.SetSocketOption(SocketOptionLevel.IP, SocketOptionName.HeaderIncluded, true);
+                socket.Bind(new IPEndPoint(sourceIp, 0));
+                socket.SendTo(packet, new IPEndPoint(destinationIp, 0));
             }
-
-            // Receiving TCP response from target
-            using (var recieveSocket = new Socket(family, SocketType.Raw, ProtocolType.Tcp))
+            else
             {
-                recieveSocket.Bind(new IPEndPoint(sourceIp, 0));
-                recieveSocket.ReceiveTimeout = timeout;
+                using var sendingSocket = new Socket(family, SocketType.Raw, ProtocolType.Tcp);
+                sendingSocket.SendTo(packet, new IPEndPoint(destinationIp, 0));
+                socket.Bind(new IPEndPoint(sourceIp, 0)); // bind the receiving socket after sending
+            }
+            
+            socket.Bind(new IPEndPoint(sourceIp, 0));
+            socket.ReceiveTimeout = timeout;
 
-                byte[] buffer = new byte[4096];
-                EndPoint remoteEp = family == AddressFamily.InterNetwork
-                    ? new IPEndPoint(IPAddress.Any, 0)
-                    : new IPEndPoint(IPAddress.IPv6Any, 0);
+            byte[] buffer = new byte[4096];
+            EndPoint remoteEp = family == AddressFamily.InterNetwork
+                ? new IPEndPoint(IPAddress.Any, 0)
+                : new IPEndPoint(IPAddress.IPv6Any, 0);
 
-                try
+            try
+            {
+                while (true)
                 {
-                    while (true)
+                    var received = socket.ReceiveFrom(buffer, ref remoteEp);
+                    if (received <= 0) continue;
+
+                    if (family == AddressFamily.InterNetwork)
                     {
-                        var received = recieveSocket.ReceiveFrom(buffer, ref remoteEp);
-                        if (received <= 0) continue;
+                        // Parse IPv4 header fields
+                        var srcIp = new IPAddress(new[] { buffer[12], buffer[13], buffer[14], buffer[15] });
+                        var dstIp = new IPAddress(new[] { buffer[16], buffer[17], buffer[18], buffer[19] });
 
-                        if (family == AddressFamily.InterNetwork)
-                        {
-                            // Parse IPv4 header fields
-                            var srcIp = new IPAddress(new[] { buffer[12], buffer[13], buffer[14], buffer[15] });
-                            var dstIp = new IPAddress(new[] { buffer[16], buffer[17], buffer[18], buffer[19] });
+                        // Make sure packet is from the correct target
+                        if (!srcIp.Equals(destinationIp) || !dstIp.Equals(sourceIp)) continue;
 
-                            // Make sure packet is from the correct target
-                            if (!srcIp.Equals(destinationIp) || !dstIp.Equals(sourceIp)) continue;
+                        var ipHeaderLen = (buffer[0] & 0x0F) * 4;
+                        if (ipHeaderLen + 20 > received) continue;
 
-                            var ipHeaderLen = (buffer[0] & 0x0F) * 4;
-                            if (ipHeaderLen + 20 > received) continue;
+                        var srcPort = (ushort)((buffer[ipHeaderLen] << 8) + buffer[ipHeaderLen + 1]);
+                        var dstPort = (ushort)((buffer[ipHeaderLen + 2] << 8) + buffer[ipHeaderLen + 3]);
+                        var flags = buffer[ipHeaderLen + 13];
 
-                            var srcPort = (ushort)((buffer[ipHeaderLen] << 8) + buffer[ipHeaderLen + 1]);
-                            var dstPort = (ushort)((buffer[ipHeaderLen + 2] << 8) + buffer[ipHeaderLen + 3]);
-                            var flags = buffer[ipHeaderLen + 13];
+                        if (srcPort != port || dstPort != sourcePort) continue;
 
-                            if (srcPort != port || dstPort != sourcePort) continue;
-
-                            // SYN-ACK = open, RST-ACK = closed, anything else = filtered
-                            if ((flags & 0x12) == 0x12)
-                                Console.WriteLine($"{ipAddress} {port} tcp open");
-                            else if ((flags & 0x14) == 0x14)
-                                Console.WriteLine($"{ipAddress} {port} tcp closed");
-                            else
-                                Console.WriteLine($"{ipAddress} {port} tcp filtered");
-                        }
+                        // SYN-ACK = open, RST-ACK = closed, anything else = filtered
+                        if ((flags & 0x12) == 0x12)
+                            Console.WriteLine($"{ipAddress} {port} tcp open");
+                        else if ((flags & 0x14) == 0x14)
+                            Console.WriteLine($"{ipAddress} {port} tcp closed");
                         else
-                        {
-                            // Parse IPv6 header fields
-                            var srcIpBytes = new byte[16];
-                            var dstIpBytes = new byte[16];
-                            Buffer.BlockCopy(buffer, 8, srcIpBytes, 0, 16);
-                            Buffer.BlockCopy(buffer, 24, dstIpBytes, 0, 16);
-
-                            var srcIp = new IPAddress(srcIpBytes);
-                            var dstIp = new IPAddress(dstIpBytes);
-
-                            if (!srcIp.Equals(destinationIp) || !dstIp.Equals(sourceIp)) continue;
-
-                            var ipHeaderLen = 40; // IPv6 header is always 40 bytes
-                            if (ipHeaderLen + 20 > received) continue;
-
-                            var srcPort = (ushort)((buffer[ipHeaderLen] << 8) + buffer[ipHeaderLen + 1]);
-                            var dstPort = (ushort)((buffer[ipHeaderLen + 2] << 8) + buffer[ipHeaderLen + 3]);
-                            var flags = buffer[ipHeaderLen + 13];
-
-                            if (srcPort != port || dstPort != sourcePort) continue;
-
-                            if ((flags & 0x12) == 0x12)
-                                Console.WriteLine($"{ipAddress} {port} tcp open");
-                            else if ((flags & 0x14) == 0x14)
-                                Console.WriteLine($"{ipAddress} {port} tcp closed");
-                            else
-                                Console.WriteLine($"{ipAddress} {port} tcp filtered");
-                        }
-
-                        gotResponse = true;
-                        return;
+                            Console.WriteLine($"{ipAddress} {port} tcp filtered");
                     }
-                }
-                catch (SocketException ex)
-                {
-                    if (ex.SocketErrorCode == SocketError.TimedOut) continue;
-                    Console.WriteLine($"Socket error: {ex.Message}");
+                    else
+                    {
+                        // Parse IPv6 header fields
+                        var srcIpBytes = new byte[16];
+                        var dstIpBytes = new byte[16];
+                        Buffer.BlockCopy(buffer, 8, srcIpBytes, 0, 16);
+                        Buffer.BlockCopy(buffer, 24, dstIpBytes, 0, 16);
+
+                        var srcIp = new IPAddress(srcIpBytes);
+                        var dstIp = new IPAddress(dstIpBytes);
+
+                        if (!srcIp.Equals(destinationIp) || !dstIp.Equals(sourceIp)) continue;
+
+                        var ipHeaderLen = 40; // IPv6 header is always 40 bytes
+                        if (ipHeaderLen + 20 > received) continue;
+
+                        var srcPort = (ushort)((buffer[ipHeaderLen] << 8) + buffer[ipHeaderLen + 1]);
+                        var dstPort = (ushort)((buffer[ipHeaderLen + 2] << 8) + buffer[ipHeaderLen + 3]);
+                        var flags = buffer[ipHeaderLen + 13];
+
+                        if (srcPort != port || dstPort != sourcePort) continue;
+
+                        if ((flags & 0x12) == 0x12)
+                            Console.WriteLine($"{ipAddress} {port} tcp open");
+                        else if ((flags & 0x14) == 0x14)
+                            Console.WriteLine($"{ipAddress} {port} tcp closed");
+                        else
+                            Console.WriteLine($"{ipAddress} {port} tcp filtered");
+                    }
+
+                    gotResponse = true;
                     return;
                 }
+            }
+            catch (SocketException ex)
+            {
+                if (ex.SocketErrorCode == SocketError.TimedOut) continue;
+                Console.WriteLine($"Socket error: {ex.Message}");
+                return;
             }
         }
 
