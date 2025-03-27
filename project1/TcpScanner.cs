@@ -13,7 +13,9 @@ public static class TcpScanner
         var sourcePort = (ushort)new Random().Next(1024, 65535);
 
         // Create TCP header (SYN packet)
-        var tcpHeader = new TcpHeader(sourcePort, (ushort)port, sourceIp, destinationIp).GetBytes();
+        var tcpHeader = isIpv6
+            ? new Ipv6TcpHeader(sourcePort, (ushort)port, sourceIp, destinationIp).GetBytes()
+            : new Ipv4TcpHeader(sourcePort, (ushort)port, sourceIp, destinationIp).GetBytes();
 
         // Build IP header (IPv4 or IPv6), total length includes both IP + TCP header
         var ipHeader = isIpv6
@@ -100,7 +102,7 @@ public static class TcpScanner
 
                         if (!srcIp.Equals(destinationIp) || !dstIp.Equals(sourceIp)) continue;
 
-                        var ipHeaderLen = 0; // IPv6 header is always 40 bytes
+                        var ipHeaderLen = 0;
                         if (ipHeaderLen + 20 > received) continue;
 
                         var srcPort = (ushort)((buffer[ipHeaderLen] << 8) + buffer[ipHeaderLen + 1]);
