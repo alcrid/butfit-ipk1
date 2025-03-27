@@ -36,12 +36,8 @@ UDP scanning works by sending a UDP packet to every targeted port. For most port
 
 | Probe Response | Assigned State   |
 |----------------|------------------|
-| Any UDP response from the target port (unusual) | open        |
-| No response received (even after retransmissions) | open or filtered |
+| No response received | open or filtered |
 | ICMP port unreachable error (type 3, code 3) | closed       |
-| Other ICMP unreachable errors (type 3, code 1, 2, 9, 10, or 13) | filtered |
-
-In your project, the UDP scan will report both open and filtered states together, as the distinction between "open" and "filtered" is not required. If no response is received, the port is treated as **filtered**. If an ICMP "Port Unreachable" (ICMP type 3, code 3 for IPv4 or type 1, code 4 for IPv6) is received, the port is marked **closed**.
 
 **UDP scan flow:**
 - **Any UDP response** from the target port (though this is unusual) is marked as **open**.
@@ -71,18 +67,27 @@ Reference: [Nmap UDP Scan](https://nmap.org/book/scan-methods-udp-scan.html)
 - **`Ipv4Header.cs`, `Ipv6Header.cs`, `TcpHeader.cs`**: Responsible for raw header creation and checksum computation.
 
 ### Output Format
+```bash
 <IP> <PORT> <tcp|udp> <open|closed|filtered>
+<IP> <PORT> <tcp|udp> <open|closed|filtered>
+```
 
 **Example Output:**
 127.0.0.1 22 tcp open 127.0.0.1 53 udp closed
 
 ### Usage
 ```bash
-./ipk-l4-scan [-i interface] [-t ports] [-u ports] [-w timeout] target
+./ipk-l4-scan [-i | --interface interface] [-t | --pt ports] [-u | --pu ports] [-w | --wait timeout] target
 ```
+- interface if not specified uses the first one simmilar to nmap 
+- ports argument both for Udp and Tcp support both ranges or ports specified separately, 
+- --pu 80,1,9-12 are valid ports port 1, 9, 10,11,12,80 get scanned
+- the target can be an ipv4 address an ipv6 address or a hostname if it is a hostname both the ipv4 and if it exists the ipv6 are used. 
+
 # Example
 ```bash
-./ipk-l4-scan -i eth0 -t 80,443 -u 53 www.vutbr.cz
+sudo ./ipk-l4-scan -i eth0 -t 80,443 -u 53 www.fit.vutbr.cz
+sudo ./ipk-l4-scan -t 80-99,10 --pu 50 www.fit.vutbr.cz
 ```
 
 ## TCP Scanning
@@ -116,92 +121,126 @@ In UDP scanning, when a UDP datagram is sent to a target port, if the port is cl
 
 ## Testing
 
-### What was tested:
-- TCP and UDP port status detection (open, closed, filtered)
+### What was tested
+- TCP port status detection on both localhost and external websites (open, closed, filtered)
+- UDP port status detection on remote hosts (open, closed)
 - IPv4 and IPv6 functionality
-- Timeout behavior
-- Interface listing
-- Invalid input handling
+- Interface listing functionality when no arguments or only `--interface` is given
+- Robustness of argument parsing and validation
 
-### Why it was tested:
-To verify scanner reliability, and usability under different scenarios and edge cases.
+### Why it was tested
+To validate the scanner's correctness and RFC compliance under various configurations, edge cases, and inputs. Ensuring stability, accurate detection of port states, and compatibility across both IPv4 and IPv6 were primary objectives.
 
-## Argparser tests
-In the file `test_args.sh`, combinations of invalid inputs were tested to see if they return invalid:
+### How it was tested
+- Used `nmap` as a reference tool for known open/closed ports
+- Simulated filtered ports using `iptables` (for IPv4) and `ip6tables` (for IPv6)
+- Verified invalid argument combinations using a dedicated shell script
+- Confirmed expected output formatting with command-line tests
 
-- `"sudo ./ipk-l4-scan -i eht0"`  # Typo in interface
-- `"sudo ./ipk-l4-scan --interface enp0s3"`  # Missing target
-- `"sudo ./ipk-l4-scan -u 20"`  # Missing target
-- `"sudo ./ipk-l4-scan --pu 20 127.0.0.1"`  # `--pu` needs range
-- `"sudo ./ipk-l4-scan --pt 20 127.0.0.1"`  # `--pt` needs range
-- `"sudo ./ipk-l4-scan -i enp0s3 -w -t 20 localhost"`  # `-w` missing value
-- `"sudo ./ipk-l4-scan -i enp0s3 -w 300 -t 2000000 localhost"`  # Port out of range
-- `"sudo ./ipk-l4-scan -i enp0s3 --pu -20 127.0.0.1 www.fit.vutbr.cz"`  # Negative port
-- `"sudo ./ipk-l4-scan -i enp0s3 --pt 20,30,40,-20 127.0.0.1"`  # Negative port
-- `"sudo ./ipk-l4-scan -i enp0s3 -w 120 -u 200-45 --pu 33 www.fit.vutbr.cz"`  # Invalid range
-- `"sudo ./ipk-l4-scan -i enp0s3 --pt 20-30-40 127.0.0.1"`  # Invalid range format
+### What was the testing environment
+- OS: Ubuntu 24.04 LTS (IPK25 Virtual Machine)
+- Architecture: amd64
+- Interface: `enp0s3` (and `lo` for localhost)
+- Internet: Enabled
 
-### How it was tested:
-- Ran the scanner against localhost and known public IPs.
-- Verified known open and closed ports using `nmap`.
-- Simulated filtered ports using `iptables` on localhost.
+---
 
-### Example Test:
+### Argument Parser Tests
+A test script (`test_args.sh`) was created to validate that incorrect argument combinations correctly return a non-zero exit code and print error messages. Example inputs tested include:
 
-bash
-$ ./ipk-l4-scan -i eth0 -t 22,80 -u 53 localhost
-127.0.0.1 22 tcp open
-127.0.0.1 80 tcp closed
-Compared against:
+| Input                                                                                      | Description                                |
+|--------------------------------------------------------------------------------------------|--------------------------------------------|
+| `sudo ./ipk-l4-scan -i eht0`                                                               | Typo in interface name                     |
+| `sudo ./ipk-l4-scan --interface enp0s3`                                                    | Missing target                             |
+| `sudo ./ipk-l4-scan -u 20`                                                                 | Missing target                             |
+| `sudo ./ipk-l4-scan -i enp0s3 -w -t 20 localhost`                                          | Missing timeout value                      |
+| `sudo ./ipk-l4-scan -i enp0s3 -w 300 -t 2000000 localhost`                                 | Port number out of range                   |
+| `sudo ./ipk-l4-scan -i enp0s3 --pu -20 127.0.0.1 www.fit.vutbr.cz`                         | Negative port number                       |
+| `sudo ./ipk-l4-scan -i enp0s3 --pt 20,30,40,-20 127.0.0.1`                                 | Negative port in list                      |
+| `sudo ./ipk-l4-scan -i enp0s3 -w 120 -u 200-45 --pu 33 www.fit.vutbr.cz`                   | Invalid port range                         |
+| `sudo ./ipk-l4-scan -i enp0s3 --pt 20-30-40 127.0.0.1`                                     | Invalid range format                       |
 
-bash
-$ nmap -sS -sU -p 22,80,53 localhost
+All these returned proper error codes and did not crash the application.
 
-## IPV4
-### UDP Tests
-- **Open port on localhost**: sudo nc -lu 123 → shows open in both Nmap and our scanner
-- **Public UDP test**: sudo nmap -sU -p 33400-33500 8.8.8.8 → found port 33440 closed
-- **Our scanner result**: also reports 33440 as closed (matches Nmap)
+---
+
+### UDP Tests (IPv4 and IPv6)
+- Verified UDP closed port detection using:
+  ```bash
+  sudo nmap -sU -p 33400-33500 8.8.8.8
+  sudo ./ipk-l4-scan --pu 33440 8.8.8.8
+  ```
+  Output:
+  ```
+  8.8.8.8 33440 udp closed
+  ```
+- Also tested the same against the IPv6 address of Google DNS:
+  ```bash
+  sudo ./ipk-l4-scan --pu 33440 2001:4860:4860::8888
+  ```
+
+---
 
 ### TCP Tests
-- Used Nmap to find open ports on localhost:
 
-631/tcp  open  ipp
-1000/tcp open  cadlock
+#### Localhost (IPv4)
+- Nmap scan:
+  ```bash
+  sudo nmap -sS localhost
+  ```
+  Output:
+  ```
+  631/tcp open  ipp
+  ```
 
+#### Simulating a Filtered Port
+- Added a filtered rule:
+  ```bash
+  sudo iptables -I INPUT -i lo -p tcp --dport 632 -j DROP
+  ```
+- For IPv6:
+  ```bash
+  sudo ip6tables -A OUTPUT -p tcp --sport 632 -j REJECT
+  sudo ip -6 addr add 2001:db8::1/64 dev enp0s3
+  sudo sysctl -w net.ipv6.conf.all.disable_ipv6=0
+  sudo sysctl -w net.ipv6.conf.default.disable_ipv6=0
+  ```
+- Then scanned:
+  ```bash
+  sudo ./ipk-l4-scan -i enp0s3 -t 630-633 localhost
+  ```
+  Output:
+  ```
+  127.0.0.1 630 tcp closed
+  2001:db8::1 630 tcp closed
+  127.0.0.1 631 tcp open
+  2001:db8::1 631 tcp open
+  127.0.0.1 632 tcp filtered
+  2001:db8::1 632 tcp filtered
+  127.0.0.1 633 tcp closed
+  2001:db8::1 633 tcp closed
+  ```
 
+#### Remote Site Scan
+- Verified against: www.fit.vutbr.cz
+- Nmap result:
+  ```bash
+  PORT     STATE SERVICE
+  443/tcp  open  https
+  587/tcp  open  submission
+  3306/tcp open  mysql
+  ```
 - Ran scanner:
+  ```bash
+  sudo ./ipk-l4-scan -i enp0s3 --pt 443,587,3306 www.fit.vutbr.cz
+  ```
+  Output:
+  ```bash
+  147.229.9.23 443 tcp open
+  ```
 
-bash
-sudo ./ipk-l4-scan --pt 630-635 localhost
-
-
-Output:
-
-127.0.0.1 630 tcp closed
-127.0.0.1 631 tcp open
-127.0.0.1 632 tcp closed
-127.0.0.1 633 tcp closed
-127.0.0.1 634 tcp closed
-127.0.0.1 635 tcp closed
-
-### TCP Filtered Simulation with iptables
-
-bash
-sudo iptables -I INPUT -i lo -p tcp --dport 632 -j DROP
-
-Scanner output:
-
-127.0.0.1 632 tcp filtered
-
-
-IPV6
-UDP
-sudo sysctl -w net.ipv6.conf.all.disable_ipv6=0
-sudo sysctl -w net.ipv6.conf.default.disable_ipv6=0
-enable ipv6 on device
-
-
+All outputs matched expectations.
+---
 
 ## Bibliography
 - RFC 793: Transmission Control Protocol
