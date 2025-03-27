@@ -93,11 +93,11 @@ internal static class Program
             {
                 if (ipv4Address != null)
                 {
-                    TcpScanner.Scan(ipv4Address!.ToString(), port, timeout, isIpv6: false, interfaceName);
+                    TcpScanner.Scan(ipv4Address.ToString(), port, timeout, isIpv6: false, interfaceName);
                 }
                 if(ipv6Address != null)
                 {
-                    TcpScanner.Scan(ipv6Address!.ToString(), port, timeout, isIpv6: true, interfaceName);
+                    TcpScanner.Scan(ipv6Address.ToString(), port, timeout, isIpv6: true, interfaceName);
                 }
             }
 
@@ -106,7 +106,7 @@ internal static class Program
             {
                 if (ipv4Address != null)
                 {
-                    UdpScanner.Scan(ipv4Address!.ToString(), port, timeout, isIpv6: false, interfaceName);
+                    UdpScanner.Scan(ipv4Address.ToString(), port, timeout, isIpv6: false, interfaceName);
                 }
                 if(ipv6Address != null)
                 {
@@ -126,7 +126,7 @@ internal static class Program
         }
     }
 
-    // Parse the port ranges, e.g., "22-80" or "22,80,443"
+    // Parse the port ranges
     static List<int> ParsePorts(string input)
     {
         List<int> ports = new List<int>();
