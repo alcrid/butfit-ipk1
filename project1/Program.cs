@@ -1,4 +1,5 @@
-﻿using System.Net;
+﻿using System.Diagnostics;
+using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
 
@@ -77,25 +78,40 @@ internal static class Program
         try
         {
             IPAddress[] resolvedAddresses = Dns.GetHostAddresses(target);
+            
             if (resolvedAddresses.Length == 0)
             {
                 Console.Error.WriteLine("Error: No IP addresses resolved.");
                 Environment.Exit(1);
             }
-
-            IPAddress selectedIp = resolvedAddresses[0];
-            var isIpv6 = selectedIp.AddressFamily == AddressFamily.InterNetworkV6;
+            
+            var ipv4Address = resolvedAddresses.FirstOrDefault(addr => addr.AddressFamily == AddressFamily.InterNetwork);
+            var ipv6Address = resolvedAddresses.FirstOrDefault(addr => addr.AddressFamily == AddressFamily.InterNetworkV6);
 
             // Scan TCP ports
             foreach (var port in tcpPorts)
             {
-                TcpScanner.Scan(selectedIp.ToString(), port, timeout, isIpv6, interfaceName);
+                if (ipv4Address != null)
+                {
+                    TcpScanner.Scan(ipv4Address!.ToString(), port, timeout, isIpv6: false, interfaceName);
+                }
+                if(ipv6Address != null)
+                {
+                    TcpScanner.Scan(ipv6Address!.ToString(), port, timeout, isIpv6: true, interfaceName);
+                }
             }
 
             // Scan UDP ports
             foreach (var port in udpPorts)
             {
-                UdpScanner.Scan(selectedIp.ToString(), port, timeout, isIpv6, interfaceName);
+                if (ipv4Address != null)
+                {
+                    UdpScanner.Scan(ipv4Address!.ToString(), port, timeout, isIpv6: false, interfaceName);
+                }
+                if(ipv6Address != null)
+                {
+                    UdpScanner.Scan(ipv6Address.ToString(), port, timeout, isIpv6: true, interfaceName);
+                }
             }
         }
         catch (SocketException ex)

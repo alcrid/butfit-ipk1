@@ -100,7 +100,7 @@ public static class TcpScanner
 
                         if (!srcIp.Equals(destinationIp) || !dstIp.Equals(sourceIp)) continue;
 
-                        var ipHeaderLen = 40; // IPv6 header is always 40 bytes
+                        var ipHeaderLen = 0; // IPv6 header is always 40 bytes
                         if (ipHeaderLen + 20 > received) continue;
 
                         var srcPort = (ushort)((buffer[ipHeaderLen] << 8) + buffer[ipHeaderLen + 1]);

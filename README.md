@@ -185,8 +185,6 @@ Output:
 127.0.0.1 634 tcp closed
 127.0.0.1 635 tcp closed
 
-
-
 ### TCP Filtered Simulation with iptables
 
 bash
