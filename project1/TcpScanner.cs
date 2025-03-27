@@ -1,5 +1,4 @@
 using System.Net;
-using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using project1.models;
 
@@ -10,10 +9,10 @@ public static class TcpScanner
     public static void Scan(string ipAddress, int port, int timeout, bool isIpv6, string? interfaceName)
     {
         var destinationIp = IPAddress.Parse(ipAddress);
-        var sourceIp = Utils.GetInterfaceAddress(interfaceName, isIpv6);
+        var sourceIp = Utils.GetInterfaceAddress(interfaceName, isIpv6); // Assuming you have a method that provides source IP.
         var sourcePort = (ushort)new Random().Next(1024, 65535);
 
-        // Create TCP header (SYN packet) with pseudo-header-based checksum
+        // Create TCP header (SYN packet)
         var tcpHeader = new TcpHeader(sourcePort, (ushort)port, sourceIp, destinationIp).GetBytes();
 
         // Build IP header (IPv4 or IPv6), total length includes both IP + TCP header
@@ -31,26 +30,25 @@ public static class TcpScanner
         for (var attempt = 0; attempt < 2; attempt++)
         {
             var family = isIpv6 ? AddressFamily.InterNetworkV6 : AddressFamily.InterNetwork;
+            var protocol = ProtocolType.Tcp; // Use ProtocolType.Tcp for both IPv4 and IPv6 (as done in the second code)
 
-            using var socket = new Socket(family, SocketType.Raw, ProtocolType.Tcp);
-
+            using var socket = new Socket(family, SocketType.Raw, protocol);
             socket.ReceiveTimeout = timeout;
+
+            // Ensure the socket is bound once and properly configured
+            socket.Bind(new IPEndPoint(sourceIp, 0));
 
             if (!isIpv6)
             {
                 socket.SetSocketOption(SocketOptionLevel.IP, SocketOptionName.HeaderIncluded, true);
-                socket.Bind(new IPEndPoint(sourceIp, 0));
                 socket.SendTo(packet, new IPEndPoint(destinationIp, 0));
             }
             else
             {
-                using var sendingSocket = new Socket(family, SocketType.Raw, ProtocolType.Tcp);
+                // For IPv6, we use a separate sending socket
+                using var sendingSocket = new Socket(family, SocketType.Raw, protocol);
                 sendingSocket.SendTo(packet, new IPEndPoint(destinationIp, 0));
-                socket.Bind(new IPEndPoint(sourceIp, 0)); // bind the receiving socket after sending
             }
-            
-            socket.Bind(new IPEndPoint(sourceIp, 0));
-            socket.ReceiveTimeout = timeout;
 
             byte[] buffer = new byte[4096];
             EndPoint remoteEp = family == AddressFamily.InterNetwork
@@ -70,7 +68,6 @@ public static class TcpScanner
                         var srcIp = new IPAddress(new[] { buffer[12], buffer[13], buffer[14], buffer[15] });
                         var dstIp = new IPAddress(new[] { buffer[16], buffer[17], buffer[18], buffer[19] });
 
-                        // Make sure packet is from the correct target
                         if (!srcIp.Equals(destinationIp) || !dstIp.Equals(sourceIp)) continue;
 
                         var ipHeaderLen = (buffer[0] & 0x0F) * 4;
@@ -132,7 +129,6 @@ public static class TcpScanner
             }
         }
 
-        // No response after 2 attempts = filtered
         if (!gotResponse)
         {
             Console.WriteLine($"{ipAddress} {port} tcp filtered");
