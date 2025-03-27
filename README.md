@@ -68,7 +68,7 @@ Reference: [Nmap UDP Scan](https://nmap.org/book/scan-methods-udp-scan.html)
 - **`TcpScanner.cs`**: Crafts and sends SYN packets, receives and analyzes responses.
 - **`UdpScanner.cs`**: Sends UDP datagrams, listens for ICMP messages.
 - **`Utils.cs`**: Network utility functions (e.g., interface IP resolution).
-- **`Ipv4Header.cs`, `Ipv6Header.cs`, `TcpHeader.cs`**: Responsible for raw header creation and checksum computation.
+- **`Ipv4Header.cs`, `Ipv6Header.cs`, `Ipv6TcpHeader.cs` `Ipv4TcpHeader.cs` **: Responsible for raw header creation and checksum computation.
 
 ### Output Format
 ```bash
@@ -106,9 +106,6 @@ The `Ipv4Header` class is responsible for crafting the IPv4 header for each pack
 
 ### Creating an IPv6 header:
 The `Ipv6Header` class constructs the IPv6 header, including the source and destination IPs and payload length. It also sets the next header value (TCP for this case) and the hop limit (set to 64).
-
-### Creating TCP header:
-The `TcpHeader` class builds the TCP header, setting values such as source and destination ports, sequence numbers, flags (SYN in this case), and window size.
 
 ## UDP Scanning
 
@@ -216,14 +213,15 @@ All these returned proper error codes and did not crash the application.
   Output:
   ```
   127.0.0.1 630 tcp closed
-  2001:db8::1 630 tcp closed
+  2001:db8::1 630 tcp filtered
   127.0.0.1 631 tcp open
-  2001:db8::1 631 tcp open
+  2001:db8::1 631 tcp filtered
   127.0.0.1 632 tcp filtered
   2001:db8::1 632 tcp filtered
   127.0.0.1 633 tcp closed
-  2001:db8::1 633 tcp closed
+  2001:db8::1 633 tcp filtered
   ```
+This output isn't correct since the ipv6 port should be open but the adding the port to the header doesn't work
 
 #### Remote Site Scan
 - Verified against: www.fit.vutbr.cz
@@ -240,7 +238,12 @@ All these returned proper error codes and did not crash the application.
   ```
   Output:
   ```bash
-  147.229.9.23 443 tcp open
+  147.229.9.23 443 tcp ope
+  2001:67c:1220:809::93e5:917 443 tcp filtered
+  147.229.9.23 587 tcp open
+  2001:67c:1220:809::93e5:917 587 tcp filtered
+  147.229.9.23 3306 tcp filtered
+  2001:67c:1220:809::93e5:917 3306 tcp filtered
   ```
 
 All outputs matched expectations.
